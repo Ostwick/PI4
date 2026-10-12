@@ -1,0 +1,37 @@
+services:
+  - type: cron
+    name: pipeline-meteorologico-inmet
+    runtime: python
+    plan: starter
+    schedule: "0 6 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: dados
+      - key: MONGODB_HOURLY_COLLECTION
+        value: observacoes_horarias
+      - key: MONGODB_DAILY_COLLECTION
+        value: historico
+      - key: MONGODB_PREDICTIONS_COLLECTION
+        value: previsoes
+      - key: INMET_STATION_CODE
+        sync: false
+      - key: INMET_STATION_NAME
+        value: Presidente Prudente
+      - key: INMET_LOOKBACK_DAYS
+        value: "5"
+      - key: HISTORY_YEARS
+        value: "10"
+      - key: HISTORICAL_CSV
+        value: data/historico_inmet.csv
+      - key: FORECAST_HORIZON_DAYS
+        value: "10"
+      - key: ML_MODEL
+        value: random_forest
+      - key: ML_MIN_TRAINING_DAYS
+        value: "90"
+      - key: ML_RANDOM_STATE
+        value: "42"
