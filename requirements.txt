@@ -3,3 +3,5 @@ pymongo[srv]>=4.10,<5.0
 python-dotenv>=1.0,<2.0
 requests>=2.32,<3.0
 scikit-learn>=1.5,<2.0
+Flask
+gunicorn
