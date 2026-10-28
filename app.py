@@ -1,6 +1,8 @@
 
 import os
 import secrets
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
@@ -10,6 +12,9 @@ from main import run_pipeline
 app = Flask(__name__)
 
 API_TOKEN = os.environ.get("API_TOKEN", "").strip()
+_BACKGROUND_PIPELINE = os.environ.get("APP_USE_BACKGROUND_PIPELINE", "true").strip().lower() not in {"0", "false", "no"}
+_BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+_BACKGROUND_LOCK = threading.Lock()
 
 
 def _requested_token() -> str:
@@ -38,11 +43,20 @@ def atualizar():
     if API_TOKEN and (not token or not secrets.compare_digest(token, API_TOKEN)):
         return jsonify({"status": "unauthorized"}), 401
 
+    now = datetime.now(timezone.utc).isoformat()
+    if _BACKGROUND_PIPELINE:
+        with _BACKGROUND_LOCK:
+            _BACKGROUND_EXECUTOR.submit(run_pipeline)
+        return jsonify({
+            "status": "queued",
+            "updated_at": now,
+        }), 202
+
     try:
         run_pipeline()
         return jsonify({
             "status": "ok",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": now,
         })
     except Exception:
         app.logger.exception("Erro no pipeline")

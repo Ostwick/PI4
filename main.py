@@ -65,7 +65,19 @@ def run_pipeline():
         history = repo.get_daily_history(INMET_STATION_CODE)
         if not history:
             raise RuntimeError("Não há histórico diário suficiente para publicar previsões.")
-        ml_forecast = predict(history, FORECAST_HORIZON_DAYS)
+
+        try:
+            ml_forecast = predict(history, FORECAST_HORIZON_DAYS)
+        except RuntimeError as error:
+            print(f"Prévisão ML não atualizada: {error}")
+            ml_forecast = {
+                "modelo": "random_forest",
+                "status": "modelo_nao_encontrado",
+                "previsoes": [],
+                "data_referencia": datetime.now(timezone.utc).date().isoformat(),
+                "observacoes_recebidas": len(hourly_docs),
+            }
+
         hourly_forecast = predict_rain_next_hours(
             repo.get_hourly_history(INMET_STATION_CODE), hours=24
         )
