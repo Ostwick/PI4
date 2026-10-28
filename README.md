@@ -89,15 +89,46 @@ O primeiro modelo implementado é Random Forest, escolhido como baseline operaci
 - Não envie `.env` ao GitHub. Guarde `MONGODB_URI` como secret no Render.
 - O script cria índices únicos nas coleções configuradas. Se a coleção já tiver duplicatas na combinação estação + data/hora, a criação do índice falhará; remova ou consolide as duplicatas antes.
 
-## 7. Agendar no Render
+## 7. Fluxo de produção limpo: treino fora da rotina diária
 
-1. Envie o projeto para um repositório Git.
-2. No Render, crie um Cron Job a partir do repositório ou use este `render.yaml` como Blueprint.
-3. Configure as variáveis de ambiente secretas `MONGODB_URI` e `INMET_STATION_CODE`.
-4. O comando é `python main.py`.
-5. O exemplo executa diariamente às 06:00 UTC. Acompanhe os logs e faça um Trigger Run manual antes de confiar no agendamento.
+A rotina de produção não deve treinar modelos a cada execução. O padrão correto é:
 
-O Cron Job não precisa de endpoint HTTP: o Render executa diretamente `python main.py`. A cada execução, o job busca os últimos dias de observações, atualiza `observacoes_horarias`, recalcula `historico`, treina as previsões e substitui o documento da estação em `previsoes`. Não mantenha o agendador antigo chamando apenas `previsao_10d.py`, porque ele não atualiza as observações nem os modelos horários.
+1. Coletar e armazenar novos dados no MongoDB.
+2. Publicar a previsão diária usando o modelo já treinado.
+3. Treinar/validar modelos novos em uma rotina separada, manual ou agendada para manutenção.
+4. Salvar o melhor modelo em um artefato persistido.
+5. Atualizar o artefato do ambiente em produção somente quando a nova versão for validada.
+
+Esse padrão evita timeouts no Render, reduz custo computacional e mantém a coleta de dados operacional e previsível.
+
+## 8. Comparar Random Forest, XGBoost e SARIMAX em produção
+
+Para testar a melhor opção, execute a comparação fora do cron:
+
+```powershell
+python -m scripts.comparar_modelos
+```
+
+O script compara:
+
+- Random Forest
+- XGBoost
+- SARIMAX/SARIMA
+
+usando os mesmos dados históricos e uma janela de validação temporal. Ele calcula MAE por variável e imprime o ranking dos modelos. O vencedor deve ser salvo como artefato final e usado pelo refresh diário.
+
+O fluxo recomendado é:
+
+```text
+historico MongoDB
+    -> comparar modelos (offline)
+    -> escolher melhor modelo
+    -> salvar artifact (.joblib)
+    -> refresh diário usa artifact
+    -> publica previsao no MongoDB
+```
+
+A comparação deve usar apenas dados anteriores à janela de validação. Não misture futuro com treino; isso distorce a métrica de precisão e cria falsa confiança.
 
 ## Limitações e validações necessárias
 

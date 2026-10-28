@@ -3,5 +3,7 @@ pymongo[srv]>=4.10,<5.0
 python-dotenv>=1.0,<2.0
 requests>=2.32,<3.0
 scikit-learn>=1.5,<2.0
+xgboost>=2.1.0
+statsmodels>=0.14.4
 Flask
 gunicorn
