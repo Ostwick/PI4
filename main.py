@@ -4,11 +4,14 @@ from src.inmet_client import fetch_recent_observations
 from src.transform import build_daily_docs
 from src.mongo_repository import WeatherRepository
 from src.forecast_client import fetch_official_forecast
+from src.forecast_combiner import combine_forecasts
 from src.ml_forecaster import predict
 from src.hourly_forecaster import predict_rain_next_hours
 from src.settings import (
     FORECAST_HORIZON_DAYS,
     INMET_STATION_CODE,
+    FORECAST_INMET_WEIGHT,
+    FORECAST_ML_WEIGHT,
 )
 
 
@@ -81,6 +84,20 @@ def run_pipeline():
         hourly_forecast = predict_rain_next_hours(
             repo.get_hourly_history(INMET_STATION_CODE), hours=24
         )
+        official_forecast = None
+        official_status = "indisponivel"
+        try:
+            official_forecast = fetch_official_forecast()
+            official_status = "atualizada"
+        except Exception as error:
+            print(f"Previsão oficial indisponível; mantendo o ML: {error}")
+
+        combined_forecast = combine_forecasts(
+            ml_forecast,
+            official_forecast,
+            ml_weight=FORECAST_ML_WEIGHT,
+            official_weight=FORECAST_INMET_WEIGHT,
+        )
         prediction_document = {
             "estacao_codigo": INMET_STATION_CODE,
             "estacao_nome": history[-1].get("estacao_nome") if history else None,
@@ -89,14 +106,10 @@ def run_pipeline():
             "observacoes_recebidas": len(hourly_docs),
             "modelo_ml": ml_forecast,
             "chuva_proximas_horas": hourly_forecast,
-            "previsao_oficial": None,
-            "status_previsao_oficial": "indisponivel",
+            "previsao_oficial": official_forecast,
+            "previsao_combinada": combined_forecast,
+            "status_previsao_oficial": official_status,
         }
-        try:
-            prediction_document["previsao_oficial"] = fetch_official_forecast()
-            prediction_document["status_previsao_oficial"] = "atualizada"
-        except Exception as error:
-            print(f"Previsão oficial indisponível; mantendo o ML: {error}")
 
         repo.replace_prediction(INMET_STATION_CODE, prediction_document)
 

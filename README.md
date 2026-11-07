@@ -10,6 +10,7 @@ Pipeline Python para importar histórico CSV do INMET, atualizar observações r
 - `src/mongo_repository.py`: conexão, índices únicos e upsert em lote.
 - `src/ml_forecaster.py`: treinamento e previsão Random Forest com validação MAE.
 - `src/forecast_client.py`: leitura da previsão oficial de 10 dias do INMET.
+- `src/forecast_combiner.py`: alinhamento por data e combinação ponderada do ML com o INMET.
 - `render.yaml`: agendamento diário às 06:00 UTC.
 
 ## 1. Preparar o ambiente local
@@ -71,11 +72,22 @@ Cada execução de `main.py` grava um documento por estação na coleção defin
 - `modelo_ml.previsoes[].chuva_provavel`: indicação diária derivada de `precipitacao_total_mm >= 0.1`.
 - `chuva_proximas_horas.previsoes`: temperatura, umidade, probabilidade de chuva e indicação booleana para cada uma das próximas 24 horas.
 - `modelo_ml.validacao.mae_por_variavel`: erro absoluto médio calculado em uma janela histórica de validação.
+- `previsao_combinada.previsoes`: previsão diária combinada por média ponderada, preservando também os valores `_ml` e `_inmet`.
+- `previsao_combinada.pesos`: pesos usados na combinação; por padrão, 40% ML e 60% INMET.
 - `previsao_oficial.previsao_10dias`: resposta de previsão oficial do INMET, quando disponível.
 - `gerado_em` e `status_previsao_oficial`: metadados para o frontend saber quando atualizar a tela.
 - `status_observacoes` e `observacoes_recebidas`: indicam se a execução recebeu dados novos ou usou o histórico salvo.
 
 O frontend pode buscar `{ estacao_codigo: "A707" }` e ordenar ou exibir `modelo_ml.previsoes` por `data_local`. Se o INMET estiver indisponível, o documento continua sendo atualizado com o ML e o status oficial fica `indisponivel`.
+
+Para exibir a previsão combinada, use `previsao_combinada.previsoes`. Quando os dois modelos fornecem o mesmo campo e a mesma data, o valor final é calculado como `0.4 * ML + 0.6 * INMET`. O registro também inclui, por exemplo, `temperatura_maxima_c_ml` e `temperatura_maxima_c_inmet`, permitindo comparar as fontes na interface. Se uma fonte estiver indisponível, o valor disponível é mantido sem inventar uma média.
+
+Os pesos podem ser alterados no ambiente:
+
+```text
+FORECAST_ML_WEIGHT=0.4
+FORECAST_INMET_WEIGHT=0.6
+```
 
 MAE significa *Mean Absolute Error* (erro absoluto médio). Ele é a média de `abs(valor_real - valor_previsto)` em dados que o modelo não usou para treinar. Um MAE de `1.479` em temperatura significa erro médio de aproximadamente `1.479 °C`; quanto menor, melhor. Ele não é uma garantia para o futuro, apenas uma medida de desempenho histórico.
 
